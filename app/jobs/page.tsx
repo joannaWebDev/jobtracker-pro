@@ -19,7 +19,7 @@ function checkGeographicalMismatch(jobs: Job[], searchCity?: string, searchRegio
   
   let jobsWithCityMentioned = 0;
   
-  jobs.forEach((job, index) => {
+  jobs.forEach((job) => {
     const jobLocation = job.location.toLowerCase();
     const jobText = (job.location + ' ' + job.company + ' ' + job.description).toLowerCase();
     

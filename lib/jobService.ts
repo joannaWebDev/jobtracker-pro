@@ -1,59 +1,86 @@
-import { adzunaAPI } from "@/lib/adzuna";
-import { Job } from "@/lib/types";
+import {adzunaAPI} from "@/lib/adzuna";
+import {Job} from "@/lib/types";
 
-// Known major cities and their regions/countries
-function getCityRegionCorrection(city: string, currentRegion?: string): { region: string; country?: string } | null {
-  const cityLower = city.toLowerCase();
+// Rate limiter using a simple queue system
+class RateLimiter {
+  private lastRequestTime = 0;
+  private minInterval = 300; // 300ms between requests
   
-  // Major European cities
-  const europeanCities = {
-    'madrid': { region: 'europe', country: 'es' },
-    'barcelona': { region: 'europe', country: 'es' },
-    'paris': { region: 'europe', country: 'fr' },
-    'lyon': { region: 'europe', country: 'fr' },
-    'london': { region: 'europe', country: 'gb' },
-    'manchester': { region: 'europe', country: 'gb' },
-    'berlin': { region: 'europe', country: 'de' },
-    'munich': { region: 'europe', country: 'de' },
-    'rome': { region: 'europe', country: 'it' },
-    'milan': { region: 'europe', country: 'it' },
-    'amsterdam': { region: 'europe', country: 'nl' },
-    'vienna': { region: 'europe', country: 'at' },
-    'zurich': { region: 'europe', country: 'ch' },
-    'brussels': { region: 'europe', country: 'be' },
-  };
-  
-  // Major US cities
-  const usCities = {
-    'new york': { region: 'us', country: 'us' },
-    'los angeles': { region: 'us', country: 'us' },
-    'chicago': { region: 'us', country: 'us' },
-    'houston': { region: 'us', country: 'us' },
-    'phoenix': { region: 'us', country: 'us' },
-    'philadelphia': { region: 'us', country: 'us' },
-    'san antonio': { region: 'us', country: 'us' },
-    'san diego': { region: 'us', country: 'us' },
-    'dallas': { region: 'us', country: 'us' },
-    'san jose': { region: 'us', country: 'us' },
-    'austin': { region: 'us', country: 'us' },
-    'boston': { region: 'us', country: 'us' },
-    'seattle': { region: 'us', country: 'us' },
-    'denver': { region: 'us', country: 'us' },
-    'washington': { region: 'us', country: 'us' },
-    'miami': { region: 'us', country: 'us' },
-    'atlanta': { region: 'us', country: 'us' },
-  };
-  
-  // Check European cities
-  const europeanMatch = europeanCities[cityLower as keyof typeof europeanCities];
-  if (europeanMatch && currentRegion === 'us') {
-    return europeanMatch;
+  async waitForNextRequest(): Promise<void> {
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+    
+    if (timeSinceLastRequest < this.minInterval) {
+      const waitTime = this.minInterval - timeSinceLastRequest;
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
+    this.lastRequestTime = Date.now();
+  }
+}
+
+const rateLimiter = new RateLimiter();
+
+const SUPPORTED_COUNTRIES = {
+  europe: ['gb', 'de', 'fr', 'it', 'es', 'nl', 'at', 'be', 'ch'],
+  us: ['us'],
+};
+
+function getCountriesToSearch(searchRegion?: string, searchCountry?: string): string[] {
+  if (searchCountry) {
+    return [searchCountry];
   }
   
-  // Check US cities  
-  const usMatch = usCities[cityLower as keyof typeof usCities];
-  if (usMatch && currentRegion === 'europe') {
-    return usMatch;
+  if (searchRegion === 'us') {
+    return [...SUPPORTED_COUNTRIES.us];
+  }
+  
+  if (searchRegion === 'europe') {
+    return [...SUPPORTED_COUNTRIES.europe];
+  }
+  
+  return [];
+}
+
+async function getCityRegionCorrection(city: string, currentRegion?: string): Promise<{ region: string; country?: string } | null> {
+  if (!city || !currentRegion) return null;
+
+  try {
+    const oppositeRegion = currentRegion === 'us' ? 'europe' : 'us';
+    const oppositeCountries = getCountriesToSearch(oppositeRegion);
+
+    // Test a representative sample of countries from the opposite region
+    const countriesToTest = oppositeRegion === 'europe' 
+      ? oppositeCountries.slice(0, 5) // Test major EU countries: GB, DE, FR, IT, ES
+      : oppositeCountries; // Test US (only one country)
+    
+    for (const country of countriesToTest) {
+      await rateLimiter.waitForNextRequest();
+      
+      const response = await adzunaAPI.searchJobs({
+        location: city,
+        country,
+        page: 1,
+        resultsPerPage: 5, // Small sample
+      });
+      
+      if (response && response.count && response.count > 0) {
+        // Found jobs in opposite region, check if they actually mention the city
+        const cityMentioned = response.results?.some(job => 
+          (job.location.display_name + ' ' + job.description).toLowerCase().includes(city.toLowerCase())
+        );
+
+        if (cityMentioned) {
+          return {
+            region: oppositeRegion,
+            country: oppositeCountries.length === 1 ? country : undefined
+          };
+        }
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error in city region correction:', error);
   }
   
   return null;
@@ -88,13 +115,13 @@ export interface JobSearchResult {
 export async function searchJobs(params: JobSearchParams): Promise<JobSearchResult> {
   const { query, searchCompany, searchType, searchWorkMode, searchRegion, searchCountry, searchCity, searchDatePosted, currentPage, jobsPerPage } = params;
   
-  // Autocorrect geographical mismatches
+  // Autocorrect geographical mismatches using API
   let correctedRegion = searchRegion;
   let correctedCountry = searchCountry;
   let correctionInfo: JobSearchResult['correctionApplied'] = undefined;
   
   if (searchCity && !searchCountry) {
-    const cityCorrection = getCityRegionCorrection(searchCity, searchRegion);
+    const cityCorrection = await getCityRegionCorrection(searchCity, searchRegion);
     if (cityCorrection) {
       correctionInfo = {
         originalRegion: searchRegion || '',
@@ -109,7 +136,6 @@ export async function searchJobs(params: JobSearchParams): Promise<JobSearchResu
 
   const externalJobsToShow = jobsPerPage;
 
-  // Get countries to search based on corrected region/country selection
   const countriesToSearch = getCountriesToSearch(correctedRegion, correctedCountry);
 
   const externalJobs: Job[] = [];
@@ -118,7 +144,6 @@ export async function searchJobs(params: JobSearchParams): Promise<JobSearchResu
 
   const requiresClientFiltering = (searchType && ['Part-time', 'Contract', 'Internship'].includes(searchType)) || searchCompany || searchDatePosted;
   
-  // Get external job counts (only if not client-side filtering)
   if (!requiresClientFiltering) {
     try {
       for (const country of countriesToSearch) {
@@ -143,7 +168,6 @@ export async function searchJobs(params: JobSearchParams): Promise<JobSearchResu
     }
   }
 
-  // Fetch external jobs for display - we need to fetch more pages to account for filtering
   try {
     if (externalJobsToShow > 0) {
       // Fetch more results than needed since client-side filtering will reduce them
@@ -229,10 +253,8 @@ export async function searchJobs(params: JobSearchParams): Promise<JobSearchResu
     apiError = error instanceof Error ? error.message : 'Failed to fetch external jobs';
   }
 
-  // Apply region-based filtering
   let allJobs = applyRegionFilter([...externalJobs]);
   
-  // Apply work mode filtering
   if (searchWorkMode) {
     allJobs = applyWorkModeFilter(allJobs, searchWorkMode);
   }
@@ -260,21 +282,6 @@ export async function searchJobs(params: JobSearchParams): Promise<JobSearchResu
   };
 }
 
-function getCountriesToSearch(searchRegion?: string, searchCountry?: string): string[] {
-  if (searchCountry) {
-    return [searchCountry];
-  }
-  
-  if (searchRegion === 'us') {
-    return ['us'];
-  }
-  
-  if (searchRegion === 'europe') {
-    return ['gb', 'de', 'fr', 'it', 'es', 'nl', 'at', 'be', 'ch'];
-  }
-  
-  return [];
-}
 
 function applyRegionFilter(jobs: Job[]): Job[] {
   // Region filtering is handled at API level during job fetching
