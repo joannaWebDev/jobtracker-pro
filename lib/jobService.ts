@@ -1,6 +1,64 @@
 import { adzunaAPI } from "@/lib/adzuna";
 import { Job } from "@/lib/types";
 
+// Known major cities and their regions/countries
+function getCityRegionCorrection(city: string, currentRegion?: string): { region: string; country?: string } | null {
+  const cityLower = city.toLowerCase();
+  
+  // Major European cities
+  const europeanCities = {
+    'madrid': { region: 'europe', country: 'es' },
+    'barcelona': { region: 'europe', country: 'es' },
+    'paris': { region: 'europe', country: 'fr' },
+    'lyon': { region: 'europe', country: 'fr' },
+    'london': { region: 'europe', country: 'gb' },
+    'manchester': { region: 'europe', country: 'gb' },
+    'berlin': { region: 'europe', country: 'de' },
+    'munich': { region: 'europe', country: 'de' },
+    'rome': { region: 'europe', country: 'it' },
+    'milan': { region: 'europe', country: 'it' },
+    'amsterdam': { region: 'europe', country: 'nl' },
+    'vienna': { region: 'europe', country: 'at' },
+    'zurich': { region: 'europe', country: 'ch' },
+    'brussels': { region: 'europe', country: 'be' },
+  };
+  
+  // Major US cities
+  const usCities = {
+    'new york': { region: 'us', country: 'us' },
+    'los angeles': { region: 'us', country: 'us' },
+    'chicago': { region: 'us', country: 'us' },
+    'houston': { region: 'us', country: 'us' },
+    'phoenix': { region: 'us', country: 'us' },
+    'philadelphia': { region: 'us', country: 'us' },
+    'san antonio': { region: 'us', country: 'us' },
+    'san diego': { region: 'us', country: 'us' },
+    'dallas': { region: 'us', country: 'us' },
+    'san jose': { region: 'us', country: 'us' },
+    'austin': { region: 'us', country: 'us' },
+    'boston': { region: 'us', country: 'us' },
+    'seattle': { region: 'us', country: 'us' },
+    'denver': { region: 'us', country: 'us' },
+    'washington': { region: 'us', country: 'us' },
+    'miami': { region: 'us', country: 'us' },
+    'atlanta': { region: 'us', country: 'us' },
+  };
+  
+  // Check European cities
+  const europeanMatch = europeanCities[cityLower as keyof typeof europeanCities];
+  if (europeanMatch && currentRegion === 'us') {
+    return europeanMatch;
+  }
+  
+  // Check US cities  
+  const usMatch = usCities[cityLower as keyof typeof usCities];
+  if (usMatch && currentRegion === 'europe') {
+    return usMatch;
+  }
+  
+  return null;
+}
+
 export interface JobSearchParams {
   query?: string;
   searchCompany?: string;
@@ -19,15 +77,40 @@ export interface JobSearchResult {
   totalJobs: number;
   totalPages: number;
   apiError?: string;
+  correctionApplied?: {
+    originalRegion: string;
+    correctedRegion: string;
+    correctedCountry?: string;
+    city: string;
+  };
 }
 
 export async function searchJobs(params: JobSearchParams): Promise<JobSearchResult> {
   const { query, searchCompany, searchType, searchWorkMode, searchRegion, searchCountry, searchCity, searchDatePosted, currentPage, jobsPerPage } = params;
+  
+  // Autocorrect geographical mismatches
+  let correctedRegion = searchRegion;
+  let correctedCountry = searchCountry;
+  let correctionInfo: JobSearchResult['correctionApplied'] = undefined;
+  
+  if (searchCity && !searchCountry) {
+    const cityCorrection = getCityRegionCorrection(searchCity, searchRegion);
+    if (cityCorrection) {
+      correctionInfo = {
+        originalRegion: searchRegion || '',
+        correctedRegion: cityCorrection.region,
+        correctedCountry: cityCorrection.country,
+        city: searchCity,
+      };
+      correctedRegion = cityCorrection.region;
+      correctedCountry = cityCorrection.country;
+    }
+  }
 
   const externalJobsToShow = jobsPerPage;
 
-  // Get countries to search based on region/country selection
-  const countriesToSearch = getCountriesToSearch(searchRegion, searchCountry);
+  // Get countries to search based on corrected region/country selection
+  const countriesToSearch = getCountriesToSearch(correctedRegion, correctedCountry);
 
   const externalJobs: Job[] = [];
   let apiError: string | null = null;
@@ -56,7 +139,7 @@ export async function searchJobs(params: JobSearchParams): Promise<JobSearchResu
         }
       }
     } catch (error) {
-      console.log('Could not get external job counts:', error);
+      console.error(error)
     }
   }
 
@@ -173,6 +256,7 @@ export async function searchJobs(params: JobSearchParams): Promise<JobSearchResu
     totalJobs,
     totalPages,
     ...(apiError && { apiError }),
+    ...(correctionInfo && { correctionApplied: correctionInfo }),
   };
 }
 
@@ -185,12 +269,14 @@ function getCountriesToSearch(searchRegion?: string, searchCountry?: string): st
     return ['us'];
   }
   
-  // Default to Europe
-  return ['gb', 'de'];
+  if (searchRegion === 'europe') {
+    return ['gb', 'de', 'fr', 'it', 'es', 'nl', 'at', 'be', 'ch'];
+  }
+  
+  return [];
 }
 
 function applyRegionFilter(jobs: Job[]): Job[] {
-  // All jobs are from Adzuna now, so no additional filtering needed
   // Region filtering is handled at API level during job fetching
   return jobs;
 }

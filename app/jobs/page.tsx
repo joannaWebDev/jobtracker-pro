@@ -1,4 +1,5 @@
 import { searchJobs } from "@/lib/jobService";
+import { Job } from "@/lib/types";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import ScrollToTop from "@/components/ScrollToTop";
@@ -7,6 +8,60 @@ import JobSearchForm from "@/components/JobSearchForm";
 import JobList from "@/components/JobList";
 import JobPagination from "@/components/JobPagination";
 import JobsPageClient from "@/components/JobsPageClient";
+
+// Check if there's a geographical mismatch based on job location formats
+function checkGeographicalMismatch(jobs: Job[], searchCity?: string, searchRegion?: string, searchCountry?: string): boolean {
+  if (!searchCity || jobs.length === 0 || (!searchCountry && !searchRegion)) return false;
+  
+  let matchingRegionJobs = 0;
+  let nonMatchingRegionJobs = 0;
+  
+  
+  let jobsWithCityMentioned = 0;
+  
+  jobs.forEach((job, index) => {
+    const jobLocation = job.location.toLowerCase();
+    const jobText = (job.location + ' ' + job.company + ' ' + job.description).toLowerCase();
+    
+    // Check if this job is actually relevant to our city search
+    const cityMentioned = jobText.includes(searchCity.toLowerCase());
+    if (cityMentioned) jobsWithCityMentioned++;
+    
+    
+    // Simple analysis: Check if we're getting jobs from unexpected regions
+    if (searchRegion === 'us') {
+      // Searching US but getting European jobs
+      const hasEuropeanIndicators = jobText.match(/\b(london|paris|madrid|berlin|rome|amsterdam|barcelona|milan|vienna|prague|budapest|stockholm|copenhagen|oslo|helsinki|dublin|uk|england|france|spain|germany|italy|netherlands|belgium|austria|switzerland|portugal|europe|european|ltd|gmbh|sa|bv|ag)\b/);
+      if (hasEuropeanIndicators) {
+        nonMatchingRegionJobs++;
+      } else {
+        matchingRegionJobs++;
+      }
+    } else if (searchRegion === 'europe') {
+      // Searching Europe but getting US jobs  
+      const hasUSIndicators = jobText.match(/\b(new york|los angeles|chicago|houston|phoenix|philadelphia|san antonio|san diego|dallas|san jose|austin|boston|seattle|denver|miami|atlanta|washington dc|usa|united states|america|california|texas|florida|illinois|new york|ny|ca|tx|fl|il|ma|wa|llc|inc\.?|corp\.?)\b/) || jobLocation.includes(',');
+      if (hasUSIndicators) {
+        nonMatchingRegionJobs++;
+      } else {
+        matchingRegionJobs++;
+      }
+    } else {
+      matchingRegionJobs++;
+    }
+  });
+  
+  // Calculate city mention percentage
+  const cityMentionPercentage = (jobsWithCityMentioned / jobs.length) * 100;
+  
+  const total = matchingRegionJobs + nonMatchingRegionJobs;
+  const mismatchPercentage = total > 0 ? (nonMatchingRegionJobs / total) * 100 : 0;
+  
+  
+  // Show mismatch if:
+  // 1. High mismatch percentage (>30%), OR  
+  // 2. Very low city mention percentage (<10%) indicating city filter is being ignored
+  return mismatchPercentage > 30 || cityMentionPercentage < 10;
+}
 
 export default async function JobsPage({
   searchParams,
@@ -19,7 +74,7 @@ export default async function JobsPage({
   const searchCompany = company as string | undefined;
   const searchType = type as string | undefined;
   const searchWorkMode = workMode as string | undefined;
-  const searchRegion = region as string | undefined;
+  const searchRegion = (region as string | undefined) || 'europe'; // Default to Europe
   const searchCountry = country as string | undefined;
   const searchCity = city as string | undefined;
   const searchDatePosted = datePosted as string | undefined;
@@ -74,7 +129,50 @@ export default async function JobsPage({
           <h1 className="text-2xl font-bold text-gray-900">Search Jobs</h1>
           <div className="text-sm text-gray-500">
             {result.totalJobs.toLocaleString()} total jobs
-            {searchRegion === 'us' ? ' from US' : ' from Europe'}
+            {(() => {
+              // Show corrected region if auto-correction was applied
+              if (result.correctionApplied) {
+                const originalRegionName = result.correctionApplied.originalRegion === 'us' ? 'North America' : 'Europe';
+                const correctedRegionName = result.correctionApplied.correctedRegion === 'us' ? 'North America' : 'Europe';
+                
+                return (
+                  <> from <span className="line-through text-gray-400">{originalRegionName}</span> {correctedRegionName}</>
+                );
+              }
+              
+              // Check if there's a geographical mismatch for visual indication (when no auto-correction)
+              const hasMismatch = checkGeographicalMismatch(result.jobs, searchCity, searchRegion, searchCountry);
+              
+              if (searchCountry) {
+                const countryNames = {
+                  'us': 'United States',
+                  'gb': 'United Kingdom', 
+                  'de': 'Germany',
+                  'fr': 'France',
+                  'it': 'Italy',
+                  'es': 'Spain',
+                  'nl': 'Netherlands',
+                  'at': 'Austria',
+                  'be': 'Belgium',
+                  'ch': 'Switzerland'
+                };
+                const countryName = countryNames[searchCountry as keyof typeof countryNames] || searchCountry;
+                return hasMismatch 
+                  ? <> from <span className="line-through text-gray-400">{countryName}</span> <span className="text-amber-600">(location mismatch)</span></>
+                  : ` from ${countryName}`;
+              }
+              if (searchRegion === 'us') {
+                return hasMismatch 
+                  ? <> from <span className="line-through text-gray-400">North America</span> <span className="text-amber-600">(location mismatch)</span></>
+                  : ' from North America';
+              }
+              if (searchRegion === 'europe') {
+                return hasMismatch 
+                  ? <> from <span className="line-through text-gray-400">Europe</span> <span className="text-amber-600">(location mismatch)</span></>
+                  : ' from Europe';
+              }
+              return '';
+            })()}
             {searchCity ? ` in ${searchCity}` : ''}
             <br />
             <span className="text-xs">
@@ -88,6 +186,24 @@ export default async function JobsPage({
           </div>
         </div>
 
+        {result.correctionApplied && (
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <span className="text-blue-400 text-lg">ℹ️</span>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-blue-700">
+                  <strong>Search auto-corrected:</strong> {result.correctionApplied.city} is located in{' '}
+                  {result.correctionApplied.correctedRegion === 'us' ? 'North America' : 'Europe'}, not{' '}
+                  {result.correctionApplied.originalRegion === 'us' ? 'North America' : 'Europe'}.{' '}
+                  Showing {result.correctionApplied.city} jobs from the correct region.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-between items-center mb-4">
           <PerPageSelector currentPerPage={JOBS_PER_PAGE} />
         </div>
@@ -97,14 +213,23 @@ export default async function JobsPage({
           searchCompany={searchCompany}
           searchType={searchType}
           searchWorkMode={searchWorkMode}
-          searchRegion={searchRegion}
-          searchCountry={searchCountry}
+          searchRegion={result.correctionApplied?.correctedRegion || searchRegion}
+          searchCountry={result.correctionApplied?.correctedCountry || searchCountry}
           searchCity={searchCity}
           searchDatePosted={searchDatePosted}
         />
       </div>
 
-      <JobList jobs={result.jobs} searchWorkMode={searchWorkMode} applicationStatuses={applicationStatuses} />
+      <JobList 
+        jobs={result.jobs} 
+        searchWorkMode={searchWorkMode} 
+        applicationStatuses={applicationStatuses}
+        searchRegion={searchRegion}
+        searchCountry={searchCountry}
+        searchCity={searchCity}
+        query={query}
+        correctionApplied={!!result.correctionApplied}
+      />
 
       <JobPagination
         currentPage={currentPage}

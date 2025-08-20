@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useSearchState } from '@/hooks/useSearchState';
 
 interface JobSearchFormProps {
@@ -24,11 +25,37 @@ export default function JobSearchForm({
   searchDatePosted,
 }: JobSearchFormProps) {
   const { clearSearchState } = useSearchState();
+  const [selectedRegion, setSelectedRegion] = useState(searchRegion || 'europe');
 
   const handleClearAll = () => {
     clearSearchState();
     window.location.href = '/jobs';
   };
+
+  const getCountriesForRegion = (region: string) => {
+    if (region === 'us') {
+      return [
+        { value: 'us', label: 'United States' }
+      ];
+    }
+    if (region === 'europe') {
+      return [
+        { value: 'gb', label: 'United Kingdom' },
+        { value: 'de', label: 'Germany' },
+        { value: 'fr', label: 'France' },
+        { value: 'it', label: 'Italy' },
+        { value: 'es', label: 'Spain' },
+        { value: 'nl', label: 'Netherlands' },
+        { value: 'at', label: 'Austria' },
+        { value: 'be', label: 'Belgium' },
+        { value: 'ch', label: 'Switzerland' }
+      ];
+    }
+    return [];
+  };
+
+  const availableCountries = getCountriesForRegion(selectedRegion);
+
 
   return (
     <form className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
@@ -69,7 +96,8 @@ export default function JobSearchForm({
       </select>
       <select
         name="region"
-        defaultValue={searchRegion || 'europe'}
+        value={selectedRegion}
+        onChange={(e) => setSelectedRegion(e.target.value)}
         className="border border-gray-300 rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
       >
         <option value="">Continent</option>
@@ -82,16 +110,11 @@ export default function JobSearchForm({
         className="border border-gray-300 rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
       >
         <option value="">Country</option>
-        <option value="us">United States</option>
-        <option value="gb">United Kingdom</option>
-        <option value="de">Germany</option>
-        <option value="fr">France</option>
-        <option value="it">Italy</option>
-        <option value="es">Spain</option>
-        <option value="nl">Netherlands</option>
-        <option value="at">Austria</option>
-        <option value="be">Belgium</option>
-        <option value="ch">Switzerland</option>
+        {availableCountries.map(country => (
+          <option key={country.value} value={country.value}>
+            {country.label}
+          </option>
+        ))}
       </select>
       <input
         type="text"
