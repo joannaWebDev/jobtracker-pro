@@ -28,7 +28,7 @@ export default async function DashboardPage() {
     },
   });
 
-  // Convert Date objects to strings for client component
+  // Convert Date objects to strings for the client component
   const formattedApplications = applications.map(app => ({
     ...app,
     appliedAt: app.appliedAt.toISOString(),

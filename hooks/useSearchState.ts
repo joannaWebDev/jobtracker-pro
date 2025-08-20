@@ -19,7 +19,7 @@ export function useSearchState() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Save current search state to sessionStorage
+  // Save the current search state to sessionStorage
   const saveSearchState = () => {
     const currentState: SearchState = {
       q: searchParams.get('q') || undefined,
@@ -87,7 +87,6 @@ export function useSearchState() {
     }
   };
 
-  // Clear saved search state
   const clearSearchState = () => {
     sessionStorage.removeItem('jobSearchState');
   };

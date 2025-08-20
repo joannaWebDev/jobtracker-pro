@@ -99,7 +99,6 @@ export default function ApplyButton({ job, applicationStatus }: ApplyButtonProps
     }
   };
 
-  // All jobs are from Adzuna now
   return (
     <div className="flex gap-2">
       <a

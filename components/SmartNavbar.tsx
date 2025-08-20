@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { logout } from "@/lib/auth";
 import { useSearchState } from "@/hooks/useSearchState";
 import { usePathname } from "next/navigation";
+import React from "react";
 
 export default function SmartNavbar() {
   const { data: session } = useSession();

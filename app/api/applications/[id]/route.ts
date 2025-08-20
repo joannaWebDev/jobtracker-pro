@@ -30,7 +30,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
-    // Check if application exists and belongs to user
+    // Check if the application exists and belongs to user
     const existingApplication = await prisma.application.findFirst({
       where: {
         id,

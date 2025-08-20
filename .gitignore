@@ -43,5 +43,5 @@ next-env.d.ts
 # Personal notes
 Notes.md
 
-# Prisma generated client
+# Prisma generated client (now in node_modules/.prisma/client)
 app/generated/prisma/

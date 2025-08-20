@@ -1,4 +1,4 @@
-import { ExternalJob } from './types';
+import {Job} from './types';
 
 export interface AdzunaJob {
   id: string;
@@ -121,7 +121,8 @@ filter for remote jobs, which should give much better results than text parsing 
       
       // Country is required
       if (!params.country) {
-        throw new Error('Country parameter is required');
+        console.error('Country parameter is required');
+        return null;
       }
       const url = this.buildUrlForCountry(params.country, `search/${page}`, searchParams);
       
@@ -142,11 +143,10 @@ filter for remote jobs, which should give much better results than text parsing 
           url: url.replace(this.appKey!, '[REDACTED]'),
           body: errorText
         });
-        throw new Error(`Adzuna API error: ${response.status} ${response.statusText} - ${errorText}`);
+        return null;
       }
 
-      const data: AdzunaResponse = await response.json();
-      return data;
+      return await response.json();
       
     } catch (error) {
       console.error('Error fetching jobs from Adzuna:', error);
@@ -154,9 +154,7 @@ filter for remote jobs, which should give much better results than text parsing 
     }
   }
 
-  // Transform Adzuna job to our app's job format  
-  transformJob(adzunaJob: AdzunaJob, country?: string): ExternalJob {
-    // Get currency symbol based on country
+  transformJob(adzunaJob: AdzunaJob, country?: string): Job {
     const getCurrency = (countryCode?: string): string => {
       switch (countryCode) {
         case 'gb': return '£';
@@ -204,30 +202,6 @@ filter for remote jobs, which should give much better results than text parsing 
         name: adzunaJob.company.display_name,
       },
     };
-  }
-
-  getAvailableCountries(): Array<{code: string, name: string}> {
-    return [
-      { code: 'us', name: 'United States' },
-      { code: 'gb', name: 'United Kingdom' },
-      { code: 'de', name: 'Germany' },
-      { code: 'fr', name: 'France' },
-      { code: 'it', name: 'Italy' },
-      { code: 'es', name: 'Spain' },
-      { code: 'nl', name: 'Netherlands' },
-      { code: 'at', name: 'Austria' },
-      { code: 'be', name: 'Belgium' },
-      { code: 'ch', name: 'Switzerland' },
-      { code: 'au', name: 'Australia' },
-      { code: 'ca', name: 'Canada' },
-      { code: 'za', name: 'South Africa' },
-      { code: 'in', name: 'India' },
-      { code: 'sg', name: 'Singapore' },
-      { code: 'nz', name: 'New Zealand' },
-      { code: 'pl', name: 'Poland' },
-      { code: 'br', name: 'Brazil' },
-      { code: 'mx', name: 'Mexico' }
-    ];
   }
 }
 

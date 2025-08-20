@@ -79,16 +79,14 @@ export default function JobCard({ job, searchWorkMode, applicationStatus }: JobC
       return 'remote';
     }
     
-    // Hybrid work indicators
-    if (text.includes('hybrid') || 
+    if (text.includes('hybrid') ||
         text.includes('flexible work') ||
         text.includes('home/office') ||
         (text.includes('remote') && text.includes('office'))) {
       return 'hybrid';
     }
     
-    // On-site indicators
-    if (text.includes('on-site') || 
+    if (text.includes('on-site') ||
         text.includes('onsite') ||
         text.includes('office-based') ||
         (text.includes('office') && (text.includes('based') || text.includes('located')))) {
@@ -153,7 +151,6 @@ export default function JobCard({ job, searchWorkMode, applicationStatus }: JobC
   return (
     <div className={`p-6 rounded-lg shadow-sm ${getCardStyle()}`}>
       <div>
-        {/* Header with title and status */}
         <div className="flex justify-between items-start mb-2">
           <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
             {job.title}
