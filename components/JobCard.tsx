@@ -1,6 +1,6 @@
 'use client';
 
-import { Job, ExternalJob } from "@/lib/types";
+import { Job } from "@/lib/types";
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { formatDistanceToNow } from 'date-fns';
@@ -34,7 +34,7 @@ export default function JobCard({ job, searchWorkMode, applicationStatus }: JobC
         company: job.company,
         location: job.location,
         source: job.source || 'adzuna',
-        externalUrl: job.source === 'adzuna' ? (job as ExternalJob).externalUrl : `#${job.id}`,
+        externalUrl: job.externalUrl,
       };
 
       const response = await fetch('/api/applications', {
@@ -200,15 +200,15 @@ export default function JobCard({ job, searchWorkMode, applicationStatus }: JobC
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-500">
               {job.source === 'adzuna' 
-                ? `Via Adzuna • ${(job as ExternalJob).postedBy.name}`
+                ? `Via Adzuna • ${job.postedBy.name}`
                 : `Posted by ${job.postedBy?.name || 'Unknown'}`
               }
             </span>
-            {job.source !== 'local' && (
+
               <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
                 External
               </span>
-            )}
+
           </div>
           <span className="text-xs text-gray-400">
             Posted {formatDistanceToNow(new Date(job.postedAt), { addSuffix: true })}
@@ -216,7 +216,7 @@ export default function JobCard({ job, searchWorkMode, applicationStatus }: JobC
         </div>
         <div className="flex gap-2">
           <a
-            href={(job as ExternalJob).externalUrl}
+            href={job.externalUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="text-indigo-600 hover:text-indigo-700 font-medium"

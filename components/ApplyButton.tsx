@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { Job, ExternalJob } from '@/lib/types';
+import { Job } from '@/lib/types';
 
 interface ApplyButtonProps {
   job: Job;
@@ -68,7 +68,7 @@ export default function ApplyButton({ job, applicationStatus }: ApplyButtonProps
         company: job.company,
         location: job.location,
         source: job.source || 'adzuna',
-        externalUrl: job.source === 'adzuna' ? (job as ExternalJob).externalUrl : `#${job.id}`,
+        externalUrl: job.externalUrl,
       };
 
       const response = await fetch('/api/applications', {
@@ -102,7 +102,7 @@ export default function ApplyButton({ job, applicationStatus }: ApplyButtonProps
   return (
     <div className="flex gap-2">
       <a
-        href={(job as ExternalJob).externalUrl}
+        href={job.externalUrl}
         target="_blank"
         rel="noopener noreferrer"
         className="text-indigo-600 hover:text-indigo-700 font-medium"

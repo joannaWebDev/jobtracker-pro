@@ -1,5 +1,5 @@
 import { adzunaAPI } from "@/lib/adzuna";
-import { ExternalJob, Job } from "@/lib/types";
+import { Job } from "@/lib/types";
 
 export interface JobSearchParams {
   query?: string;
@@ -29,7 +29,7 @@ export async function searchJobs(params: JobSearchParams): Promise<JobSearchResu
   // Get countries to search based on region/country selection
   const countriesToSearch = getCountriesToSearch(searchRegion, searchCountry);
 
-  const externalJobs: ExternalJob[] = [];
+  const externalJobs: Job[] = [];
   let apiError: string | null = null;
   let externalJobsTotal = 0;
 
